@@ -8,9 +8,12 @@ int main(void) {
   const int64_t targets[] = {AC_TARGET_C, AC_TARGET_NATIVE};
   for (int k = 0; k < 2; ++k) {
     ac_convert_fn fn = ac_get_converter(AC_U8, AC_S16, targets[k]);
-    if (!fn) return 1;
+    if (!fn)
+      return 1;
     fn(input, output, 3);
-    for (int i = 0; i < 3; ++i) if (output[i] != expected[i]) return 2;
+    for (int i = 0; i < 3; ++i)
+      if (output[i] != expected[i])
+        return 2;
     fn(NULL, NULL, 0);
   }
   return ac_get_converter(AC_U8, AC_U8, AC_TARGET_NATIVE) != NULL;

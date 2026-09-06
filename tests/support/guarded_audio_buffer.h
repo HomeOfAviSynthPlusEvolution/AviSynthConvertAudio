@@ -21,15 +21,12 @@ inline std::uint8_t next_guarded_audio_padding_sentinel() noexcept {
 // samples are intentionally not represented as an owning typed array because
 // packed 24-bit samples have no native C++ element type.
 class GuardedAudioBuffer {
- public:
-  GuardedAudioBuffer(std::size_t active_bytes, std::size_t padding_bytes = 32,
-                     std::size_t alignment = 64, std::size_t alignment_offset = 0,
+public:
+  GuardedAudioBuffer(std::size_t active_bytes, std::size_t padding_bytes = 32, std::size_t alignment = 64,
+                     std::size_t alignment_offset = 0,
                      std::uint8_t padding_sentinel = next_guarded_audio_padding_sentinel())
-      : active_bytes_(active_bytes),
-        padding_bytes_(padding_bytes),
-        alignment_(alignment),
-        alignment_offset_(alignment_offset),
-        padding_sentinel_(padding_sentinel) {
+      : active_bytes_(active_bytes), padding_bytes_(padding_bytes), alignment_(alignment),
+        alignment_offset_(alignment_offset), padding_sentinel_(padding_sentinel) {
     if (alignment_ == 0 || (alignment_ & (alignment_ - 1)) != 0) {
       throw std::invalid_argument("alignment must be a power of two");
     }
@@ -91,17 +88,13 @@ class GuardedAudioBuffer {
 
   bool memory_intact() const { return guards_intact() && padding_intact(); }
 
-  std::vector<std::uint8_t> snapshot_active() const {
-    return std::vector<std::uint8_t>(data_, data_ + active_bytes_);
-  }
+  std::vector<std::uint8_t> snapshot_active() const { return std::vector<std::uint8_t>(data_, data_ + active_bytes_); }
 
-  bool active_matches(const std::vector<std::uint8_t>& snapshot) const {
-    return snapshot_active() == snapshot;
-  }
+  bool active_matches(const std::vector<std::uint8_t>& snapshot) const { return snapshot_active() == snapshot; }
 
   void corrupt_suffix_guard_for_test() { suffix_guard_[0] ^= 1; }
 
- private:
+private:
   static constexpr std::size_t kGuardBytes = 64;
   static constexpr std::uint8_t kGuardSentinel = 0xA5;
 
@@ -117,4 +110,4 @@ class GuardedAudioBuffer {
   std::uint8_t* suffix_guard_{};
 };
 
-}  // namespace avsut::test
+} // namespace avsut::test

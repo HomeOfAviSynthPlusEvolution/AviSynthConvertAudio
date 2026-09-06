@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include <string>
 
 namespace avsut::test {
@@ -12,5 +10,4 @@ struct Variant {
   Function function;
 };
 
-
-}  // namespace avsut::test
+} // namespace avsut::test

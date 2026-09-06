@@ -34,4 +34,4 @@ inline std::string format_hash(std::uint64_t hash) {
   return stream.str();
 }
 
-}  // namespace avsut::test
+} // namespace avsut::test

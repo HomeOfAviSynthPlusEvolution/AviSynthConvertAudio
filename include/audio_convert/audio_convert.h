@@ -9,13 +9,7 @@
 extern "C" {
 #endif
 
-enum ac_sample_format {
-  AC_U8 = 1,
-  AC_S16 = 2,
-  AC_S24 = 3,
-  AC_S32 = 4,
-  AC_F32 = 5
-};
+enum ac_sample_format { AC_U8 = 1, AC_S16 = 2, AC_S24 = 3, AC_S32 = 4, AC_F32 = 5 };
 
 #define AC_TARGET_C INT64_C(0)
 #define AC_TARGET_NATIVE INT64_C(-1)
@@ -42,8 +36,7 @@ int64_t ac_choose_target(int64_t allowed_targets);
 // Explicit targets must be compiled and supported by this machine.
 // Returns NULL for invalid/same-format routes or unsupported explicit targets.
 // Returned functions remain valid for the lifetime of the linked library.
-ac_convert_fn ac_get_converter(int source_format, int destination_format,
-                               int64_t target);
+ac_convert_fn ac_get_converter(int source_format, int destination_format, int64_t target);
 
 #ifdef __cplusplus
 }

@@ -10,7 +10,7 @@ namespace avsut::test {
 
 template <typename T>
 class PlaneView {
- public:
+public:
   using element_type = T;
   using value_type = std::remove_const_t<T>;
 
@@ -37,9 +37,7 @@ class PlaneView {
     if (y >= height_) {
       throw std::out_of_range("plane row is out of range");
     }
-    auto* bytes =
-        reinterpret_cast<std::conditional_t<std::is_const_v<T>, const std::uint8_t, std::uint8_t>*>(
-            data_);
+    auto* bytes = reinterpret_cast<std::conditional_t<std::is_const_v<T>, const std::uint8_t, std::uint8_t>*>(data_);
     return reinterpret_cast<T*>(bytes + y * pitch_bytes_);
   }
 
@@ -47,11 +45,11 @@ class PlaneView {
     return PlaneView<const value_type>(data_, width_, height_, pitch_bytes_);
   }
 
- private:
+private:
   T* data_;
   std::size_t width_;
   std::size_t height_;
   std::size_t pitch_bytes_;
 };
 
-}  // namespace avsut::test
+} // namespace avsut::test

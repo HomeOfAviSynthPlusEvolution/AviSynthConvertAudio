@@ -33,9 +33,9 @@ namespace audio_convert {
 
 // until 3.6.1: S16 = (S32 + 0x8000) >> 16   (plain round-before shift)
 // Actual: S16 = S32 >> 16
-void convert32To16(const void *inbuf, void *outbuf, int count) {
-  auto in16 = reinterpret_cast<const int16_t *>(inbuf);
-  auto out = reinterpret_cast<int16_t *>(outbuf);
+void convert32To16(const void* inbuf, void* outbuf, int count) {
+  auto in16 = reinterpret_cast<const int16_t*>(inbuf);
+  auto out = reinterpret_cast<int16_t*>(outbuf);
 
   for (int i = 0; i < count; i++)
     out[i] = in16[i * 2 + 1];
@@ -44,9 +44,9 @@ void convert32To16(const void *inbuf, void *outbuf, int count) {
 // until 3.6.1: S32 = (S16 << 16) + (unsigned short)(S16 + 32768)
 //              0x7fff -> 0x7fffffff, 0x8000 -> 0x80000000
 // Actual: S32 = S16 << 16
-void convert16To32(const void *inbuf, void *outbuf, int count) {
-  auto in = reinterpret_cast<const int16_t *>(inbuf);
-  auto out16 = reinterpret_cast<int16_t *>(outbuf);
+void convert16To32(const void* inbuf, void* outbuf, int count) {
+  auto in = reinterpret_cast<const int16_t*>(inbuf);
+  auto out16 = reinterpret_cast<int16_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out16[i * 2] = 0;
@@ -62,9 +62,9 @@ void convert32To8(const void* inbuf, void* outbuf, int count) {
     out[i] = in8[i * 4 + 3] + 128;
 }
 
-void convert8To32(const void *inbuf, void *outbuf, int count) {
-  auto in = reinterpret_cast<const uint8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert8To32(const void* inbuf, void* outbuf, int count) {
+  auto in = reinterpret_cast<const uint8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 4] = 0;
@@ -74,9 +74,9 @@ void convert8To32(const void *inbuf, void *outbuf, int count) {
   }
 }
 
-void convert16To8(const void *inbuf, void *outbuf, int count) {
-  auto in8 = reinterpret_cast<const int8_t *>(inbuf);
-  auto out = reinterpret_cast<uint8_t *>(outbuf);
+void convert16To8(const void* inbuf, void* outbuf, int count) {
+  auto in8 = reinterpret_cast<const int8_t*>(inbuf);
+  auto out = reinterpret_cast<uint8_t*>(outbuf);
 
   for (int i = 0; i < count; i++)
     out[i] = in8[i * 2 + 1] + 128;
@@ -85,9 +85,9 @@ void convert16To8(const void *inbuf, void *outbuf, int count) {
 // until 3.6.1: S16 = (S8 << 8) + (unsigned short)(S8 + 128)
 //              This make 0x7f(255-128) -> 0x7fff & 0x80(0-128) -> 0x8000
 // Actual: S16 = (U8-128) << 8
-void convert8To16(const void *inbuf, void *outbuf, int count) {
-  auto in = reinterpret_cast<const uint8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert8To16(const void* inbuf, void* outbuf, int count) {
+  auto in = reinterpret_cast<const uint8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 2] = 0;
@@ -95,9 +95,9 @@ void convert8To16(const void *inbuf, void *outbuf, int count) {
   }
 }
 
-void convert32To24(const void *inbuf, void *outbuf, int count) {
-  auto in8 = reinterpret_cast<const int8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert32To24(const void* inbuf, void* outbuf, int count) {
+  auto in8 = reinterpret_cast<const int8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 3 + 0] = in8[i * 4 + 1];
@@ -106,9 +106,9 @@ void convert32To24(const void *inbuf, void *outbuf, int count) {
   }
 }
 
-void convert24To32(const void *inbuf, void *outbuf, int count) {
-  auto in8 = reinterpret_cast<const int8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert24To32(const void* inbuf, void* outbuf, int count) {
+  auto in8 = reinterpret_cast<const int8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 4] = 0;
@@ -118,9 +118,9 @@ void convert24To32(const void *inbuf, void *outbuf, int count) {
   }
 }
 
-void convert24To16(const void *inbuf, void *outbuf, int count) {
-  auto in8 = reinterpret_cast<const int8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert24To16(const void* inbuf, void* outbuf, int count) {
+  auto in8 = reinterpret_cast<const int8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 2 + 0] = in8[i * 3 + 1];
@@ -128,9 +128,9 @@ void convert24To16(const void *inbuf, void *outbuf, int count) {
   }
 }
 
-void convert16To24(const void *inbuf, void *outbuf, int count) {
-  auto in8 = reinterpret_cast<const int8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert16To24(const void* inbuf, void* outbuf, int count) {
+  auto in8 = reinterpret_cast<const int8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 3] = 0;
@@ -139,17 +139,17 @@ void convert16To24(const void *inbuf, void *outbuf, int count) {
   }
 }
 
-void convert24To8(const void *inbuf, void *outbuf, int count) {
-  auto in8 = reinterpret_cast<const int8_t *>(inbuf);
-  auto out = reinterpret_cast<uint8_t *>(outbuf);
+void convert24To8(const void* inbuf, void* outbuf, int count) {
+  auto in8 = reinterpret_cast<const int8_t*>(inbuf);
+  auto out = reinterpret_cast<uint8_t*>(outbuf);
 
   for (int i = 0; i < count; i++)
     out[i] = in8[i * 3 + 2] + 128;
 }
 
-void convert8To24(const void *inbuf, void *outbuf, int count) {
-  auto in = reinterpret_cast<const uint8_t *>(inbuf);
-  auto out8 = reinterpret_cast<int8_t *>(outbuf);
+void convert8To24(const void* inbuf, void* outbuf, int count) {
+  auto in = reinterpret_cast<const uint8_t*>(inbuf);
+  auto out8 = reinterpret_cast<int8_t*>(outbuf);
 
   for (int i = 0; i < count; i++) {
     out8[i * 3] = 0;
@@ -177,10 +177,14 @@ void convertFLTTo8(const void* inbuf, void* outbuf, int count) {
   for (int i = 0; i < count; i++) {
     float val = in[i] * multiplier;
     uint8_t result;
-    if (std::isnan(val)) result = 128; // NaN becomes silence.
-    else if (val >= max8) result = 255;
-    else if (val <= min8) result = 0;
-    else result = static_cast<int8_t>(val) + 128;
+    if (std::isnan(val))
+      result = 128; // NaN becomes silence.
+    else if (val >= max8)
+      result = 255;
+    else if (val <= min8)
+      result = 0;
+    else
+      result = static_cast<int8_t>(val) + 128;
     out[i] = result;
   }
 }
@@ -204,10 +208,14 @@ void convertFLTTo16(const void* inbuf, void* outbuf, int count) {
   for (int i = 0; i < count; i++) {
     float val = in[i] * multiplier;
     int16_t result;
-    if (std::isnan(val)) result = 0;
-    else if (val >= max16) result = 32767;
-    else if (val <= min16) result = (int16_t)-32768;
-    else result = static_cast<int16_t>(val);
+    if (std::isnan(val))
+      result = 0;
+    else if (val >= max16)
+      result = 32767;
+    else if (val <= min16)
+      result = (int16_t)-32768;
+    else
+      result = static_cast<int16_t>(val);
     out[i] = result;
   }
 }
@@ -215,18 +223,18 @@ void convertFLTTo16(const void* inbuf, void* outbuf, int count) {
 // note for 32 bit conversions: 32 bit integer cannot be represented in float
 // 2147483647.0f is 2147483648.0f in reality
 
-void convert32ToFLT(const void *inbuf, void *outbuf, int count) {
-  auto in = reinterpret_cast<const int32_t *>(inbuf);
-  auto out = reinterpret_cast<float *>(outbuf);
-  constexpr float divisor = 1.0f/2147483648.0f;
+void convert32ToFLT(const void* inbuf, void* outbuf, int count) {
+  auto in = reinterpret_cast<const int32_t*>(inbuf);
+  auto out = reinterpret_cast<float*>(outbuf);
+  constexpr float divisor = 1.0f / 2147483648.0f;
 
   for (int i = 0; i < count; i++)
     out[i] = in[i] * divisor;
 }
 
-void convertFLTTo32(const void *inbuf, void *outbuf, int count) {
-  auto in = reinterpret_cast<const float *>(inbuf);
-  auto out = reinterpret_cast<int32_t *>(outbuf);
+void convertFLTTo32(const void* inbuf, void* outbuf, int count) {
+  auto in = reinterpret_cast<const float*>(inbuf);
+  auto out = reinterpret_cast<int32_t*>(outbuf);
   constexpr float multiplier = 2147483648.0f;
   constexpr float max32 = 2147483647.0f;
   constexpr float min32 = -2147483648.0f;
@@ -234,10 +242,14 @@ void convertFLTTo32(const void *inbuf, void *outbuf, int count) {
   for (int i = 0; i < count; i++) {
     float val = in[i] * multiplier;
     int32_t result;
-    if (std::isnan(val)) result = 0;
-    else if (val >= max32) result = 0x7FFFFFFF; // 2147483647
-    else if (val <= min32) result = 0x80000000; // -2147483648
-    else result = static_cast<int32_t>(val);
+    if (std::isnan(val))
+      result = 0;
+    else if (val >= max32)
+      result = 0x7FFFFFFF; // 2147483647
+    else if (val <= min32)
+      result = 0x80000000; // -2147483648
+    else
+      result = static_cast<int32_t>(val);
     out[i] = result;
   }
 }

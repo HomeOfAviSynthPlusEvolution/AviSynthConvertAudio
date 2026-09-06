@@ -5,7 +5,6 @@
 #include "kernels.h"
 #include "audio_convert/audio_convert.h"
 
-
 #include <hwy/targets.h>
 #include <climits>
 #include <cmath>
@@ -28,39 +27,47 @@ namespace hn = hwy::HWY_NAMESPACE;
 #if HWY_TARGET != HWY_SCALAR
 
 // Quantize only for packing S24, not as a general F32 -> S32 converter.
-template<class DF>
+template <class DF>
 HWY_INLINE auto QuantizeForPacked24(DF df, const hn::Vec<DF>& input) {
   const hn::Rebind<int32_t, DF> di;
-  const auto scaled = hn::Mul(hn::IfThenElseZero(hn::Eq(input, input), input),
-                             hn::Set(df, 2147483648.0f));
+  const auto scaled = hn::Mul(hn::IfThenElseZero(hn::Eq(input, input), input), hn::Set(df, 2147483648.0f));
   // The discarded low byte makes INT32_MAX and 2147483520 equivalent here.
-  return hn::ConvertInRangeTo(di, hn::Max(hn::Set(df, -2147483648.0f),
-                                       hn::Min(hn::Set(df, 2147483520.0f), scaled)));
+  return hn::ConvertInRangeTo(di, hn::Max(hn::Set(df, -2147483648.0f), hn::Min(hn::Set(df, 2147483520.0f), scaled)));
 }
 
-template<class T>
+template <class T>
 HWY_INLINE T UnpackS24Sample(const uint8_t* src) {
-  const uint32_t bits = (uint32_t(src[0]) << 8) | (uint32_t(src[1]) << 16) |
-                        (uint32_t(src[2]) << 24);
-  if constexpr (std::is_same_v<T, uint8_t>) return uint8_t(src[2] ^ 0x80);
-  else if constexpr (std::is_same_v<T, int16_t>) return static_cast<int16_t>(bits >> 16);
-  else if constexpr (std::is_same_v<T, int32_t>) return static_cast<int32_t>(bits);
-  else return static_cast<int32_t>(bits) * (1.0f / 2147483648.0f);
+  const uint32_t bits = (uint32_t(src[0]) << 8) | (uint32_t(src[1]) << 16) | (uint32_t(src[2]) << 24);
+  if constexpr (std::is_same_v<T, uint8_t>)
+    return uint8_t(src[2] ^ 0x80);
+  else if constexpr (std::is_same_v<T, int16_t>)
+    return static_cast<int16_t>(bits >> 16);
+  else if constexpr (std::is_same_v<T, int32_t>)
+    return static_cast<int32_t>(bits);
+  else
+    return static_cast<int32_t>(bits) * (1.0f / 2147483648.0f);
 }
 
-template<class T>
+template <class T>
 HWY_INLINE void PackS24Sample(T value, uint8_t* dst) {
   uint32_t bits;
-  if constexpr (std::is_same_v<T, uint8_t>) bits = uint32_t(value ^ 0x80) << 24;
-  else if constexpr (std::is_same_v<T, int16_t>) bits = uint32_t(uint16_t(value)) << 16;
-  else if constexpr (std::is_same_v<T, int32_t>) bits = static_cast<uint32_t>(value);
+  if constexpr (std::is_same_v<T, uint8_t>)
+    bits = uint32_t(value ^ 0x80) << 24;
+  else if constexpr (std::is_same_v<T, int16_t>)
+    bits = uint32_t(uint16_t(value)) << 16;
+  else if constexpr (std::is_same_v<T, int32_t>)
+    bits = static_cast<uint32_t>(value);
   else {
     const float scaled = value * 2147483648.0f;
     int32_t s;
-    if (std::isnan(scaled)) s = 0;
-    else if (scaled >= 2147483648.0f) s = INT32_MAX;
-    else if (scaled <= -2147483648.0f) s = INT32_MIN;
-    else s = static_cast<int32_t>(scaled);
+    if (std::isnan(scaled))
+      s = 0;
+    else if (scaled >= 2147483648.0f)
+      s = INT32_MAX;
+    else if (scaled <= -2147483648.0f)
+      s = INT32_MIN;
+    else
+      s = static_cast<int32_t>(scaled);
     bits = static_cast<uint32_t>(s);
   }
   dst[0] = static_cast<uint8_t>(bits >> 8);
@@ -68,11 +75,10 @@ HWY_INLINE void PackS24Sample(T value, uint8_t* dst) {
   dst[2] = static_cast<uint8_t>(bits >> 24);
 }
 
-
 // SVE/RVV vectors are sizeless and cannot be stored in C++ arrays. Use native
 // interleaved loads/stores there; fixed-width targets use hoisted byte masks.
 #if HWY_HAVE_SCALABLE || HWY_TARGET_IS_SVE
-template<class T>
+template <class T>
 HWY_INLINE void UnpackS24(const uint8_t* in, T* out, size_t count) {
   const hn::ScalableTag<T> d;
   const hn::Rebind<uint8_t, decltype(d)> d8;
@@ -91,8 +97,9 @@ HWY_INLINE void UnpackS24(const uint8_t* in, T* out, size_t count) {
     } else {
       const hn::Rebind<uint32_t, decltype(d)> du;
       const hn::Rebind<int32_t, decltype(d)> di;
-      const auto bits = hn::Or(hn::ShiftLeft<8>(hn::PromoteTo(du, low)),
-          hn::Or(hn::ShiftLeft<16>(hn::PromoteTo(du, middle)), hn::ShiftLeft<24>(hn::PromoteTo(du, high))));
+      const auto bits =
+          hn::Or(hn::ShiftLeft<8>(hn::PromoteTo(du, low)),
+                 hn::Or(hn::ShiftLeft<16>(hn::PromoteTo(du, middle)), hn::ShiftLeft<24>(hn::PromoteTo(du, high))));
       const auto value = hn::BitCast(di, bits);
       if constexpr (std::is_same_v<T, float>)
         hn::StoreU(hn::Mul(hn::ConvertTo(d, value), hn::Set(d, 1.0f / 2147483648.0f)), d, out + i);
@@ -100,10 +107,11 @@ HWY_INLINE void UnpackS24(const uint8_t* in, T* out, size_t count) {
         hn::StoreU(value, d, out + i);
     }
   }
-  for (; i < count; ++i) out[i] = UnpackS24Sample<T>(in + 3 * i);
+  for (; i < count; ++i)
+    out[i] = UnpackS24Sample<T>(in + 3 * i);
 }
 
-template<class T>
+template <class T>
 HWY_INLINE void PackS24(const T* in, uint8_t* out, size_t count) {
   const hn::ScalableTag<T> d;
   const hn::Rebind<uint8_t, decltype(d)> d8;
@@ -123,15 +131,18 @@ HWY_INLINE void PackS24(const T* in, uint8_t* out, size_t count) {
     } else {
       const hn::Rebind<uint32_t, decltype(d)> du;
       auto bits = hn::Zero(du);
-      if constexpr (std::is_same_v<T, float>) bits = hn::BitCast(du, QuantizeForPacked24(d, value));
-      else bits = hn::BitCast(du, value);
+      if constexpr (std::is_same_v<T, float>)
+        bits = hn::BitCast(du, QuantizeForPacked24(d, value));
+      else
+        bits = hn::BitCast(du, value);
       low = hn::TruncateTo(d8, hn::ShiftRight<8>(bits));
       middle = hn::TruncateTo(d8, hn::ShiftRight<16>(bits));
       high = hn::TruncateTo(d8, hn::ShiftRight<24>(bits));
     }
     hn::StoreInterleaved3(low, middle, high, d8, out + i * 3);
   }
-  for (; i < count; ++i) PackS24Sample(in[i], out + 3 * i);
+  for (; i < count; ++i)
+    PackS24Sample(in[i], out + 3 * i);
 }
 #else
 // Sixteen samples occupy exactly three packed vectors. Generate each shuffle
@@ -139,51 +150,54 @@ HWY_INLINE void PackS24(const T* in, uint8_t* out, size_t count) {
 using PackedTag = hn::FixedTag<uint8_t, 16>;
 using PackedVector = hn::Vec<PackedTag>;
 
-template<class T, bool Pack>
+template <class T, bool Pack>
 constexpr int SourceByte(int output) {
   constexpr int width = sizeof(T);
   int sample = 0, byte = 0;
   if constexpr (Pack) {
     sample = output / 3;
     byte = output % 3 + width - 3;
-    if (byte < 0) return -1;
-    if (HWY_IS_BIG_ENDIAN) byte = width - 1 - byte;
+    if (byte < 0)
+      return -1;
+    if (HWY_IS_BIG_ENDIAN)
+      byte = width - 1 - byte;
     return sample * width + byte;
   } else {
     sample = output / width;
     byte = output % width;
-    if (HWY_IS_BIG_ENDIAN) byte = width - 1 - byte;
+    if (HWY_IS_BIG_ENDIAN)
+      byte = width - 1 - byte;
     byte += 3 - width;
     return byte < 0 ? -1 : sample * 3 + byte;
   }
 }
 
-template<class T, bool Pack, size_t Output, size_t Input>
+template <class T, bool Pack, size_t Output, size_t Input>
 HWY_INLINE PackedVector LoadShuffleMask() {
   alignas(16) static constexpr auto mask = [] {
     std::array<uint8_t, 16> bytes{};
     for (int j = 0; j < 16; ++j) {
       const int source = SourceByte<T, Pack>(int(Output * 16) + j);
-      bytes[j] = source >= int(Input * 16) && source < int((Input + 1) * 16)
-          ? uint8_t(source % 16) : uint8_t(0x80);
+      bytes[j] = source >= int(Input * 16) && source < int((Input + 1) * 16) ? uint8_t(source % 16) : uint8_t(0x80);
     }
     return bytes;
   }();
   return hn::Load(PackedTag(), mask.data());
 }
 
-template<class T, bool Pack, size_t... K>
+template <class T, bool Pack, size_t... K>
 HWY_INLINE auto LoadShuffleMasks(std::index_sequence<K...>) {
   constexpr size_t inputs = Pack ? sizeof(T) : 3;
   return std::array<PackedVector, sizeof...(K)>{LoadShuffleMask<T, Pack, K / inputs, K % inputs>()...};
 }
 
-template<class T, bool Pack, size_t Output, size_t Input>
+template <class T, bool Pack, size_t Output, size_t Input>
 HWY_INLINE PackedVector ShufflePart(PackedVector input, PackedVector mask) {
   constexpr bool used = [] {
     for (int j = 0; j < 16; ++j) {
       const int source = SourceByte<T, Pack>(int(Output * 16) + j);
-      if (source >= int(Input * 16) && source < int((Input + 1) * 16)) return true;
+      if (source >= int(Input * 16) && source < int((Input + 1) * 16))
+        return true;
     }
     return false;
   }();
@@ -193,42 +207,47 @@ HWY_INLINE PackedVector ShufflePart(PackedVector input, PackedVector mask) {
     return hn::Zero(PackedTag());
 }
 
-template<class T, bool Pack, size_t Output, size_t... Input>
-HWY_INLINE PackedVector ShuffleBlock(const PackedVector* input, const PackedVector* masks, std::index_sequence<Input...>) {
+template <class T, bool Pack, size_t Output, size_t... Input>
+HWY_INLINE PackedVector ShuffleBlock(const PackedVector* input, const PackedVector* masks,
+                                     std::index_sequence<Input...>) {
   auto value = hn::Zero(PackedTag());
-  ((value = hn::Or(value, ShufflePart<T, Pack, Output, Input>(input[Input], masks[Output * sizeof...(Input) + Input]))), ...);
+  ((value = hn::Or(value, ShufflePart<T, Pack, Output, Input>(input[Input], masks[Output * sizeof...(Input) + Input]))),
+   ...);
   return value;
 }
 
-template<class T, size_t K>
+template <class T, size_t K>
 HWY_INLINE void UnpackVector(const PackedVector* input, const PackedVector* masks, T* out) {
   const hn::FixedTag<T, 16 / sizeof(T)> d;
   auto bytes = ShuffleBlock<T, false, K>(input, masks, std::make_index_sequence<3>());
-  if constexpr (std::is_same_v<T, uint8_t>) bytes = hn::Xor(bytes, hn::Set(PackedTag(), 0x80));
+  if constexpr (std::is_same_v<T, uint8_t>)
+    bytes = hn::Xor(bytes, hn::Set(PackedTag(), 0x80));
   if constexpr (std::is_same_v<T, float>) {
     const hn::Rebind<int32_t, decltype(d)> di;
-    hn::StoreU(hn::Mul(hn::ConvertTo(d, hn::BitCast(di, bytes)),
-                      hn::Set(d, 1.0f / 2147483648.0f)), d, out + K * 4);
+    hn::StoreU(hn::Mul(hn::ConvertTo(d, hn::BitCast(di, bytes)), hn::Set(d, 1.0f / 2147483648.0f)), d, out + K * 4);
   } else {
     hn::StoreU(hn::BitCast(d, bytes), d, out + K * (16 / sizeof(T)));
   }
 }
 
-template<class T, size_t... K>
+template <class T, size_t... K>
 HWY_INLINE void UnpackBlock(const PackedVector* input, const PackedVector* masks, T* out, std::index_sequence<K...>) {
   (UnpackVector<T, K>(input, masks, out), ...);
 }
 
-template<class T, size_t K>
+template <class T, size_t K>
 HWY_INLINE PackedVector LoadTypedVector(const T* in) {
   const hn::FixedTag<T, 16 / sizeof(T)> d;
   const auto value = hn::LoadU(d, in + K * (16 / sizeof(T)));
-  if constexpr (std::is_same_v<T, float>) return hn::BitCast(PackedTag(), QuantizeForPacked24(d, value));
-  else if constexpr (std::is_same_v<T, uint8_t>) return hn::Xor(value, hn::Set(d, 0x80));
-  else return hn::BitCast(PackedTag(), value);
+  if constexpr (std::is_same_v<T, float>)
+    return hn::BitCast(PackedTag(), QuantizeForPacked24(d, value));
+  else if constexpr (std::is_same_v<T, uint8_t>)
+    return hn::Xor(value, hn::Set(d, 0x80));
+  else
+    return hn::BitCast(PackedTag(), value);
 }
 
-template<class T, size_t... K>
+template <class T, size_t... K>
 HWY_INLINE void PackBlock(const T* in, const PackedVector* masks, uint8_t* out, std::index_sequence<K...>) {
   PackedVector input[sizeof(T)];
 #if HWY_MAX_BYTES >= 32
@@ -253,86 +272,97 @@ HWY_INLINE void PackBlock(const T* in, const PackedVector* masks, uint8_t* out, 
   hn::StoreU(ShuffleBlock<T, true, 2>(input, masks, std::index_sequence<K...>()), PackedTag(), out + 32);
 }
 
-template<class T>
+template <class T>
 HWY_INLINE void UnpackS24(const uint8_t* in, T* out, size_t count) {
   const auto masks = LoadShuffleMasks<T, false>(std::make_index_sequence<3 * sizeof(T)>());
   const size_t vector_end = count & ~size_t(15);
   size_t i = 0;
   for (; i < vector_end; i += 16) {
     const auto* src = in + 3 * i;
-    const PackedVector input[] = {hn::LoadU(PackedTag(), src),
-        hn::LoadU(PackedTag(), src + 16), hn::LoadU(PackedTag(), src + 32)};
+    const PackedVector input[] = {hn::LoadU(PackedTag(), src), hn::LoadU(PackedTag(), src + 16),
+                                  hn::LoadU(PackedTag(), src + 32)};
     UnpackBlock(input, masks.data(), out + i, std::make_index_sequence<sizeof(T)>());
   }
-  for (; i < count; ++i) out[i] = UnpackS24Sample<T>(in + 3 * i);
+  for (; i < count; ++i)
+    out[i] = UnpackS24Sample<T>(in + 3 * i);
 }
 
-template<class T>
+template <class T>
 HWY_INLINE void PackS24(const T* in, uint8_t* out, size_t count) {
   const size_t vector_end = count & ~size_t(15);
   size_t i = 0;
   const auto masks = LoadShuffleMasks<T, true>(std::make_index_sequence<3 * sizeof(T)>());
   for (; i < vector_end; i += 16)
     PackBlock(in + i, masks.data(), out + 3 * i, std::make_index_sequence<sizeof(T)>());
-  for (; i < count; ++i) PackS24Sample(in[i], out + 3 * i);
+  for (; i < count; ++i)
+    PackS24Sample(in[i], out + 3 * i);
 }
 
-#endif  // Scalable or sizeless vectors
+#endif // Scalable or sizeless vectors
 
 // -----------------------------------------------------------------------------
 // S24 Wrappers
 // -----------------------------------------------------------------------------
 
 void convert24To16_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   UnpackS24(static_cast<const uint8_t*>(inbuf), static_cast<int16_t*>(outbuf), static_cast<size_t>(count));
 }
 
 void convert16To24_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   PackS24(static_cast<const int16_t*>(inbuf), static_cast<uint8_t*>(outbuf), static_cast<size_t>(count));
 }
 
 void convert24To8_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   UnpackS24(static_cast<const uint8_t*>(inbuf), static_cast<uint8_t*>(outbuf), static_cast<size_t>(count));
 }
 
 void convert8To24_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   PackS24(static_cast<const uint8_t*>(inbuf), static_cast<uint8_t*>(outbuf), static_cast<size_t>(count));
 }
 
 void convert24To32_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   UnpackS24(static_cast<const uint8_t*>(inbuf), static_cast<int32_t*>(outbuf), static_cast<size_t>(count));
 }
 
 void convert32To24_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   PackS24(static_cast<const int32_t*>(inbuf), static_cast<uint8_t*>(outbuf), static_cast<size_t>(count));
 }
 
 void convert24ToFLT_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   UnpackS24(static_cast<const uint8_t*>(inbuf), static_cast<float*>(outbuf), static_cast<size_t>(count));
 }
 
 void convertFLTTo24_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   PackS24(static_cast<const float*>(inbuf), static_cast<uint8_t*>(outbuf), static_cast<size_t>(count));
 }
 
 // U8/S16/S32 share normalization and quantization, while packed S24 keeps its
 // byte-layout helpers above. U8 has the same signed quantization with a 128 bias.
-template<class T>
+template <class T>
 constexpr float AudioScale() {
   return static_cast<float>(uint64_t{1} << (sizeof(T) * 8 - 1));
 }
 
-template<class T>
+template <class T>
 void IntegerToFloat(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   const auto* in = static_cast<const T*>(inbuf);
   auto* out = static_cast<float*>(outbuf);
   // Wider promotion blocks regressed in the native benchmark. Cap only this
@@ -345,18 +375,23 @@ void IntegerToFloat(const void* inbuf, void* outbuf, int count) {
   size_t i = 0;
   for (; i < end; i += n) {
     auto value = hn::Zero(di);
-    if constexpr (std::is_same_v<T, int32_t>) value = hn::LoadU(di, in + i);
-    else value = hn::PromoteTo(di, hn::LoadU(ds, in + i));
-    if constexpr (std::is_same_v<T, uint8_t>) value = hn::Sub(value, hn::Set(di, 128));
+    if constexpr (std::is_same_v<T, int32_t>)
+      value = hn::LoadU(di, in + i);
+    else
+      value = hn::PromoteTo(di, hn::LoadU(ds, in + i));
+    if constexpr (std::is_same_v<T, uint8_t>)
+      value = hn::Sub(value, hn::Set(di, 128));
     hn::StoreU(hn::Mul(hn::ConvertTo(df, value), hn::Set(df, 1.0f / AudioScale<T>())), df, out + i);
   }
   for (; i < static_cast<size_t>(count); ++i) {
-    if constexpr (std::is_same_v<T, uint8_t>) out[i] = (int(in[i]) - 128) * (1.0f / AudioScale<T>());
-    else out[i] = in[i] * (1.0f / AudioScale<T>());
+    if constexpr (std::is_same_v<T, uint8_t>)
+      out[i] = (int(in[i]) - 128) * (1.0f / AudioScale<T>());
+    else
+      out[i] = in[i] * (1.0f / AudioScale<T>());
   }
 }
 
-template<class T, class DF>
+template <class T, class DF>
 HWY_INLINE auto QuantizeInteger(DF df, hn::Vec<DF> input) {
   const hn::Rebind<int32_t, DF> di;
   const auto scaled = hn::Mul(hn::IfThenElseZero(hn::Eq(input, input), input), hn::Set(df, AudioScale<T>()));
@@ -364,15 +399,15 @@ HWY_INLINE auto QuantizeInteger(DF df, hn::Vec<DF> input) {
     // Highway's saturating conversion preserves the exact INT32_MAX endpoint.
     return hn::ConvertTo(di, scaled);
   } else {
-    const auto bounded = hn::Max(hn::Set(df, -AudioScale<T>()),
-        hn::Min(hn::Set(df, AudioScale<T>() - 1.0f), scaled));
+    const auto bounded = hn::Max(hn::Set(df, -AudioScale<T>()), hn::Min(hn::Set(df, AudioScale<T>() - 1.0f), scaled));
     return hn::ConvertInRangeTo(di, bounded);
   }
 }
 
-template<class T>
+template <class T>
 void FloatToInteger(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   const auto* in = static_cast<const float*>(inbuf);
   auto* out = static_cast<T*>(outbuf);
   const hn::ScalableTag<float> df;
@@ -400,14 +435,18 @@ void FloatToInteger(const void* inbuf, void* outbuf, int count) {
   for (; i < static_cast<size_t>(count); ++i) {
     const float scaled = in[i] * AudioScale<T>();
     int32_t value;
-    if (std::isnan(scaled)) value = 0;
+    if (std::isnan(scaled))
+      value = 0;
     else if (scaled >= AudioScale<T>() - 1.0f)
       value = std::is_same_v<T, int32_t> ? INT32_MAX : int32_t(AudioScale<T>() - 1.0f);
     else if (scaled <= -AudioScale<T>())
       value = std::is_same_v<T, int32_t> ? INT32_MIN : -int32_t(AudioScale<T>());
-    else value = static_cast<int32_t>(scaled);
-    if constexpr (std::is_same_v<T, uint8_t>) out[i] = static_cast<T>(value + 128);
-    else out[i] = static_cast<T>(value);
+    else
+      value = static_cast<int32_t>(scaled);
+    if constexpr (std::is_same_v<T, uint8_t>)
+      out[i] = static_cast<T>(value + 128);
+    else
+      out[i] = static_cast<T>(value);
   }
 }
 
@@ -417,7 +456,8 @@ void FloatToInteger(const void* inbuf, void* outbuf, int count) {
 
 // S32 -> S16: high 16 bits of 32-bit signed integer (in >> 16)
 void convert32To16_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   auto in = static_cast<const int32_t*>(inbuf);
   auto out = static_cast<int16_t*>(outbuf);
 
@@ -443,7 +483,8 @@ void convert32To16_HWY(const void* inbuf, void* outbuf, int count) {
 
 // S16 -> S32: widen to upper 16 bits of 32-bit integer, low 16 bits 0
 void convert16To32_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   auto in_u16 = static_cast<const uint16_t*>(inbuf);
   auto out = static_cast<int32_t*>(outbuf);
 
@@ -469,7 +510,8 @@ void convert16To32_HWY(const void* inbuf, void* outbuf, int count) {
 
 // S32 -> U8: (in >> 24) + 128 == (uint32(in) >> 24) ^ 0x80
 void convert32To8_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   auto in = static_cast<const int32_t*>(inbuf);
   auto out = static_cast<uint8_t*>(outbuf);
 
@@ -510,7 +552,8 @@ void convert32To8_HWY(const void* inbuf, void* outbuf, int count) {
 
 // U8 -> S32: (in ^ 0x80) << 24
 void convert8To32_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   auto in = static_cast<const uint8_t*>(inbuf);
   auto out = static_cast<int32_t*>(outbuf);
 
@@ -534,7 +577,8 @@ void convert8To32_HWY(const void* inbuf, void* outbuf, int count) {
 
 // S16 -> U8: (in >> 8) + 128 == (uint16(in) >> 8) ^ 0x80
 void convert16To8_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   auto in = static_cast<const int16_t*>(inbuf);
   auto out = static_cast<uint8_t*>(outbuf);
 
@@ -562,7 +606,8 @@ void convert16To8_HWY(const void* inbuf, void* outbuf, int count) {
 
 // U8 -> S16: (in ^ 0x80) << 8
 void convert8To16_HWY(const void* inbuf, void* outbuf, int count) {
-  if (count <= 0) return;
+  if (count <= 0)
+    return;
   auto in = static_cast<const uint8_t*>(inbuf);
   auto out = static_cast<int16_t*>(outbuf);
 
@@ -587,14 +632,13 @@ void convert8To16_HWY(const void* inbuf, void* outbuf, int count) {
   }
 }
 
-#endif  // HWY_TARGET != HWY_SCALAR
+#endif // HWY_TARGET != HWY_SCALAR
 
-}  // namespace HWY_NAMESPACE
-}  // namespace audio_convert
+} // namespace HWY_NAMESPACE
+} // namespace audio_convert
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
-
 
 namespace audio_convert {
 
@@ -624,62 +668,36 @@ struct RouteTable {
 };
 
 static const RouteTable kTableC = {
-  convert32To16,
-  convert16To32,
-  convert32To8,
-  convert8To32,
-  convert16To8,
-  convert8To16,
+    convert32To16,  convert16To32,  convert32To8,  convert8To32,  convert16To8,   convert8To16,
 
-  convert32To24,
-  convert24To32,
-  convert24To16,
-  convert16To24,
-  convert24To8,
-  convert8To24,
+    convert32To24,  convert24To32,  convert24To16, convert16To24, convert24To8,   convert8To24,
 
-  convert24ToFLT,
-  convertFLTTo24,
-  convert8ToFLT,
-  convertFLTTo8,
-  convert16ToFLT,
-  convertFLTTo16,
-  convert32ToFLT,
-  convertFLTTo32,
+    convert24ToFLT, convertFLTTo24, convert8ToFLT, convertFLTTo8, convert16ToFLT, convertFLTTo16,
+    convert32ToFLT, convertFLTTo32,
 };
 
-#define MAKE_ROUTE_TABLE(TARGET_MACRO) \
-  { \
-    TARGET_MACRO(convert32To16_HWY), \
-    TARGET_MACRO(convert16To32_HWY), \
-    TARGET_MACRO(convert32To8_HWY),  \
-    TARGET_MACRO(convert8To32_HWY),  \
-    TARGET_MACRO(convert16To8_HWY),  \
-    TARGET_MACRO(convert8To16_HWY),  \
-    TARGET_MACRO(convert32To24_HWY), \
-    TARGET_MACRO(convert24To32_HWY), \
-    TARGET_MACRO(convert24To16_HWY), \
-    TARGET_MACRO(convert16To24_HWY), \
-    TARGET_MACRO(convert24To8_HWY),  \
-    TARGET_MACRO(convert8To24_HWY),  \
-    TARGET_MACRO(convert24ToFLT_HWY),\
-    TARGET_MACRO(convertFLTTo24_HWY),\
-    TARGET_MACRO(IntegerToFloat<uint8_t>), \
-    TARGET_MACRO(FloatToInteger<uint8_t>), \
-    TARGET_MACRO(IntegerToFloat<int16_t>), \
-    TARGET_MACRO(FloatToInteger<int16_t>), \
-    TARGET_MACRO(IntegerToFloat<int32_t>), \
-    TARGET_MACRO(FloatToInteger<int32_t>) \
-  }
+#define MAKE_ROUTE_TABLE(TARGET_MACRO)                                                                                 \
+  {                                                                                                                    \
+      TARGET_MACRO(convert32To16_HWY),       TARGET_MACRO(convert16To32_HWY),                                          \
+      TARGET_MACRO(convert32To8_HWY),        TARGET_MACRO(convert8To32_HWY),                                           \
+      TARGET_MACRO(convert16To8_HWY),        TARGET_MACRO(convert8To16_HWY),                                           \
+      TARGET_MACRO(convert32To24_HWY),       TARGET_MACRO(convert24To32_HWY),                                          \
+      TARGET_MACRO(convert24To16_HWY),       TARGET_MACRO(convert16To24_HWY),                                          \
+      TARGET_MACRO(convert24To8_HWY),        TARGET_MACRO(convert8To24_HWY),                                           \
+      TARGET_MACRO(convert24ToFLT_HWY),      TARGET_MACRO(convertFLTTo24_HWY),                                         \
+      TARGET_MACRO(IntegerToFloat<uint8_t>), TARGET_MACRO(FloatToInteger<uint8_t>),                                    \
+      TARGET_MACRO(IntegerToFloat<int16_t>), TARGET_MACRO(FloatToInteger<int16_t>),                                    \
+      TARGET_MACRO(IntegerToFloat<int32_t>), TARGET_MACRO(FloatToInteger<int32_t>)}
 
 static const RouteTable* GetRouteTableForTarget(int64_t target) {
-  if (target == 0) return &kTableC;
+  if (target == 0)
+    return &kTableC;
   switch (target) {
-#define AC_TARGET(target, choose) \
-    case target: { \
-      static const RouteTable table = MAKE_ROUTE_TABLE(choose); \
-      return &table; \
-    }
+#define AC_TARGET(target, choose)                                                                                      \
+  case target: {                                                                                                       \
+    static const RouteTable table = MAKE_ROUTE_TABLE(choose);                                                          \
+    return &table;                                                                                                     \
+  }
 #include "targets.inc"
 #undef AC_TARGET
 
@@ -696,30 +714,51 @@ using RouteMember = convert_proc RouteTable::*;
 static RouteMember FindRoute(int src_format, int dst_format) {
   const int route = (src_format << 16) | dst_format;
   switch (route) {
-    case (AC_S32 << 16) | AC_S16: return &RouteTable::s32_to_s16;
-    case (AC_S16 << 16) | AC_S32: return &RouteTable::s16_to_s32;
-    case (AC_S32 << 16) | AC_U8:  return &RouteTable::s32_to_u8;
-    case (AC_U8  << 16) | AC_S32: return &RouteTable::u8_to_s32;
-    case (AC_S16 << 16) | AC_U8:  return &RouteTable::s16_to_u8;
-    case (AC_U8  << 16) | AC_S16: return &RouteTable::u8_to_s16;
+    case (AC_S32 << 16) | AC_S16:
+      return &RouteTable::s32_to_s16;
+    case (AC_S16 << 16) | AC_S32:
+      return &RouteTable::s16_to_s32;
+    case (AC_S32 << 16) | AC_U8:
+      return &RouteTable::s32_to_u8;
+    case (AC_U8 << 16) | AC_S32:
+      return &RouteTable::u8_to_s32;
+    case (AC_S16 << 16) | AC_U8:
+      return &RouteTable::s16_to_u8;
+    case (AC_U8 << 16) | AC_S16:
+      return &RouteTable::u8_to_s16;
 
-    case (AC_S32 << 16) | AC_S24: return &RouteTable::s32_to_s24;
-    case (AC_S24 << 16) | AC_S32: return &RouteTable::s24_to_s32;
-    case (AC_S24 << 16) | AC_S16: return &RouteTable::s24_to_s16;
-    case (AC_S16 << 16) | AC_S24: return &RouteTable::s16_to_s24;
-    case (AC_S24 << 16) | AC_U8:  return &RouteTable::s24_to_u8;
-    case (AC_U8  << 16) | AC_S24: return &RouteTable::u8_to_s24;
+    case (AC_S32 << 16) | AC_S24:
+      return &RouteTable::s32_to_s24;
+    case (AC_S24 << 16) | AC_S32:
+      return &RouteTable::s24_to_s32;
+    case (AC_S24 << 16) | AC_S16:
+      return &RouteTable::s24_to_s16;
+    case (AC_S16 << 16) | AC_S24:
+      return &RouteTable::s16_to_s24;
+    case (AC_S24 << 16) | AC_U8:
+      return &RouteTable::s24_to_u8;
+    case (AC_U8 << 16) | AC_S24:
+      return &RouteTable::u8_to_s24;
 
-    case (AC_S24 << 16) | AC_F32: return &RouteTable::s24_to_f32;
-    case (AC_F32 << 16) | AC_S24: return &RouteTable::f32_to_s24;
-    case (AC_U8 << 16) | AC_F32: return &RouteTable::u8_to_f32;
-    case (AC_F32 << 16) | AC_U8: return &RouteTable::f32_to_u8;
-    case (AC_S16 << 16) | AC_F32: return &RouteTable::s16_to_f32;
-    case (AC_F32 << 16) | AC_S16: return &RouteTable::f32_to_s16;
-    case (AC_S32 << 16) | AC_F32: return &RouteTable::s32_to_f32;
-    case (AC_F32 << 16) | AC_S32: return &RouteTable::f32_to_s32;
+    case (AC_S24 << 16) | AC_F32:
+      return &RouteTable::s24_to_f32;
+    case (AC_F32 << 16) | AC_S24:
+      return &RouteTable::f32_to_s24;
+    case (AC_U8 << 16) | AC_F32:
+      return &RouteTable::u8_to_f32;
+    case (AC_F32 << 16) | AC_U8:
+      return &RouteTable::f32_to_u8;
+    case (AC_S16 << 16) | AC_F32:
+      return &RouteTable::s16_to_f32;
+    case (AC_F32 << 16) | AC_S16:
+      return &RouteTable::f32_to_s16;
+    case (AC_S32 << 16) | AC_F32:
+      return &RouteTable::s32_to_f32;
+    case (AC_F32 << 16) | AC_S32:
+      return &RouteTable::f32_to_s32;
 
-    default: return nullptr;
+    default:
+      return nullptr;
   }
 }
 
@@ -744,7 +783,7 @@ int64_t GetHighwayAudioConvertChosenTarget(int64_t allowed_targets) {
 
 convert_proc ResolveHighwayAudioConvert(int src_format, int dst_format, int64_t allowed_targets) {
   return ResolveHighwayAudioConvertForTarget(src_format, dst_format,
-      GetHighwayAudioConvertChosenTarget(allowed_targets));
+                                             GetHighwayAudioConvertChosenTarget(allowed_targets));
 }
 
 bool IsHighwayAudioConvertSupportedRoute(int src_format, int dst_format) {

@@ -10,4 +10,4 @@ convert_proc ResolveHighwayAudioConvertForTarget(int src, int dst, int64_t targe
 int64_t GetHighwayAudioConvertChosenTarget(int64_t allowed_targets);
 int64_t GetHighwayAudioConvertCompiledTargets();
 bool IsHighwayAudioConvertSupportedRoute(int src, int dst);
-}
+} // namespace audio_convert

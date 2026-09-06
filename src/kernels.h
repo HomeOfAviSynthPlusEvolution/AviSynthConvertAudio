@@ -5,10 +5,9 @@
 
 #include <cstdint>
 
-
 namespace audio_convert {
 
-#define CONVERT_DECLARE(func) void (func)(const void *, void *, int);
+#define CONVERT_DECLARE(func) void(func)(const void*, void*, int);
 
 typedef CONVERT_DECLARE(*convert_proc);
 
@@ -30,7 +29,6 @@ CONVERT_DECLARE(convert16ToFLT);
 CONVERT_DECLARE(convertFLTTo16);
 CONVERT_DECLARE(convert32ToFLT);
 CONVERT_DECLARE(convertFLTTo32);
-
 
 #undef CONVERT_DECLARE
 
