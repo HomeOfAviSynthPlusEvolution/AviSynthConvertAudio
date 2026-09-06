@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64 / clang-cl
+            os: windows-2022
+            generator: Visual Studio 17 2022
+            arch: x64
+            toolset: ClangCL
+          - name: Windows x64 / MSVC
+            os: windows-2022
+            generator: Visual Studio 17 2022
+            arch: x64
+            toolset: v143
+          - name: Windows ARM64 / clang-cl
+            os: windows-11-vs2026-arm
+            generator: Visual Studio 18 2026
+            arch: ARM64
+            toolset: ClangCL
+          - name: Windows ARM64 / MSVC
+            os: windows-11-vs2026-arm
+            generator: Visual Studio 18 2026
+            arch: ARM64
+            toolset: v145
+          - name: Linux x64 / GCC
+            os: ubuntu-24.04
+            cc: gcc
+            cxx: g++
+            scalar: 'OFF'
+          - name: Linux ARM64 / Clang
+            os: ubuntu-24.04-arm
+            cc: clang
+            cxx: clang++
+            scalar: 'OFF'
+          - name: Linux x64 / GCC / C only
+            os: ubuntu-24.04
+            cc: gcc
+            cxx: g++
+            scalar: 'ON'
+          - name: macOS ARM64 / Apple Clang
+            os: macos-15
+            cc: clang
+            cxx: clang++
+            scalar: 'OFF'
+          - name: macOS x64 / Apple Clang
+            os: macos-15-intel
+            cc: clang
+            cxx: clang++
+            scalar: 'OFF'
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          cmake -S . -B build/ci
+          -G "${{ matrix.generator }}"
+          -A "${{ matrix.arch }}"
+          -T "${{ matrix.toolset }}"
+          -DAC_BUILD_TESTS=ON
+          -DAC_BUILD_BENCHMARKS=OFF
+          -DAC_SCALAR_ONLY=OFF
+
+      - name: Configure (Linux and macOS)
+        if: runner.os != 'Windows'
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: >-
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DAC_BUILD_TESTS=ON
+          -DAC_BUILD_BENCHMARKS=OFF
+          -DAC_SCALAR_ONLY=${{ matrix.scalar }}
+
+      - name: Build
+        run: cmake --build build/ci --config Release --parallel 3
+
+      - name: Test
+        run: ctest --test-dir build/ci -C Release --output-on-failure --no-tests=error --parallel 3
