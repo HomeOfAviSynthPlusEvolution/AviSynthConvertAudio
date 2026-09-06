@@ -1,0 +1,3 @@
+add_executable(audio_convert_bench bench.cpp)
+target_compile_features(audio_convert_bench PRIVATE cxx_std_17)
+target_link_libraries(audio_convert_bench PRIVATE AudioConvert)
